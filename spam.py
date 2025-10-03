@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # Add Guest TK !
 GUEST_ACC = {
-     "4177262443": "F637344B4B6191C5828A9789D403BE151F58827A38C1A7CA3C36C33EBECC16F4"
+     "4177273001": "A9CBD59CCA19F44C6DE5B574937A5D1A62BADD7931867030C2CD36DA1156DCBE"
 }
 
 #Encrypt_ID
@@ -56,17 +56,54 @@ def encrypt_api(plain_text):
     cipher = AES.new(key, AES.MODE_CBC, iv)
     return cipher.encrypt(pad(bytes.fromhex(plain_text), AES.block_size)).hex()
 
+
 async def get_jwt_async(uid, password):
+    """
+    Lấy JSON Web Token (JWT) từ API một cách bất đồng bộ.
+    """
+    token_url = f"https://jwt-steve.vercel.app/token?uid={uid}&password={password}"
+    
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=False) as client: # Tùy chọn: Thêm verify=False nếu bạn gặp lỗi SSL
             response = await client.get(
-                f"https://jwt-steve.vercel.app/token?uid={uid}&password={password}",
+                token_url,
                 timeout=30
             )
+            
+            # 1. Kiểm tra trạng thái HTTP thành công (200 OK)
             if response.status_code == 200:
-                return response.json().get("token")
-    except:
+                try:
+                    # 2. Phân tích JSON và lấy key "token"
+                    tokens_data = response.json()
+                    token = tokens_data.get("token")
+                    
+                    if token:
+                        return token
+                    else:
+                        print(f"Lỗi: Không tìm thấy key 'token' trong phản hồi JSON. Phản hồi đầy đủ: {tokens_data}")
+                        return None
+                        
+                except httpx.JSONDecodeError:
+                    print(f"Lỗi: Không thể phân tích phản hồi thành JSON. Phản hồi thô: {response.text[:200]}...")
+                    return None
+            else:
+                # Trả về mã lỗi nếu status code không phải 200
+                print(f"Lỗi HTTP: Yêu cầu thất bại với Status Code {response.status_code}. Phản hồi: {response.text[:200]}...")
+                return None
+
+    except httpx.ConnectTimeout:
+        print("Lỗi: Kết nối bị hết thời gian (Timeout).")
         return None
+    except httpx.RequestError as e:
+        # Bắt các lỗi kết nối chung khác (ví dụ: SSL, DNS, ConnectError)
+        print(f"Lỗi Yêu cầu (Request Error): {e}")
+        return None
+    except Exception as e:
+        # Bắt các lỗi không mong muốn khác
+        print(f"Lỗi không xác định: {e}")
+        return None
+
+
 
 # send request!
 async def send_friend_request(id, token):
